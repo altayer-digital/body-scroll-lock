@@ -4,7 +4,7 @@
 
 export interface BodyScrollOptions {
   reserveScrollBarGap?: boolean;
-  allowTouchMove?: (el: any) => boolean;
+  allowTouchMove?: (event: any) => boolean;
 }
 
 interface Lock {
@@ -34,19 +34,24 @@ type HandleScrollEvent = TouchEvent;
 
 let locks: Array<Lock> = [];
 let documentListenerAdded: boolean = false;
+let initialClientX: number = -1;
 let initialClientY: number = -1;
 let previousBodyOverflowSetting;
 let previousBodyPaddingRight;
 
 // returns true if `el` should be allowed to receive touchmove events.
-const allowTouchMove = (el: EventTarget): boolean =>
-  locks.some(lock => {
-    if (lock.options.allowTouchMove && lock.options.allowTouchMove(el)) {
+const allowTouchMove = (e): boolean => {
+  const dx = event.targetTouches[0].clientX - initialClientX;
+  const dy = event.targetTouches[0].clientY - initialClientY;
+
+  return locks.some(lock => {
+    if (lock.options.allowTouchMove && lock.options.allowTouchMove(e, { dx, dy })) {
       return true;
     }
 
     return false;
   });
+};
 
 const preventDefault = (rawEvent: HandleScrollEvent): boolean => {
   const e = rawEvent || window.event;
@@ -55,7 +60,7 @@ const preventDefault = (rawEvent: HandleScrollEvent): boolean => {
   // Recall that we do document.addEventListener('touchmove', preventDefault, { passive: false })
   // in disableBodyScroll - so if we provide this opportunity to allowTouchMove, then
   // the touchmove event on document will break.
-  if (allowTouchMove(e.target)) {
+  if (allowTouchMove(e)) {
     return true;
   }
 
@@ -119,7 +124,7 @@ const isTargetElementTotallyScrolled = (targetElement: any): boolean =>
 const handleScroll = (event: HandleScrollEvent, targetElement: any): boolean => {
   const clientY = event.targetTouches[0].clientY - initialClientY;
 
-  if (allowTouchMove(event.target)) {
+  if (allowTouchMove(event)) {
     return false;
   }
 
@@ -160,6 +165,7 @@ export const disableBodyScroll = (targetElement: any, options?: BodyScrollOption
       targetElement.ontouchstart = (event: HandleScrollEvent) => {
         if (event.targetTouches.length === 1) {
           // detect single touch.
+          initialClientX = event.targetTouches[0].clientX;
           initialClientY = event.targetTouches[0].clientY;
         }
       };
@@ -202,6 +208,7 @@ export const clearAllBodyScrollLocks = (): void => {
     locks = [];
 
     // Reset initial clientY.
+    initialClientX = -1;
     initialClientY = -1;
   } else {
     restoreOverflowSetting();
